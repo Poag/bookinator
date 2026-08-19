@@ -3,8 +3,8 @@
 # needed. Everything here has a built-in default, so config.toml can be
 # omitted entirely (e.g. in the Docker image) if you're happy with the
 # OpenRouter defaults below - only OPENROUTER_API_KEY is then required (see
-# .env.example). Switching either stage to a local provider (transcription
-# "local", writing "ollama") only needs config.toml - no extra credentials.
+# .env.example). Switching to the "local" provider only needs config.toml -
+# no extra credentials.
 
 [audio]
 # The Docker image installs ffmpeg/ffprobe on PATH, so the defaults just
@@ -16,6 +16,9 @@ ffmpeg_path = "ffmpeg"
 ffprobe_path = "ffprobe"
 chunk_minutes = 12
 chunk_overlap_seconds = 5
+# If transcription keeps hitting finish_reason "length" (the model's
+# response gets cut off before finishing), lower chunk_minutes so each
+# chunk's transcript needs less output per request.
 
 [transcription]
 # "openrouter" (cloud, audio-capable multimodal model) or "local"
@@ -29,26 +32,6 @@ openrouter_model = "google/gemini-2.5-flash"
 local_whisper_model = "small"
 local_whisper_device = "cpu"  # or "cuda" if a GPU + CUDA are available
 local_whisper_compute_type = "int8"  # "int8" for CPU; "float16" is typical for GPU
-
-[writing]
-# "openrouter" or "ollama" (a self-hosted Ollama server's OpenAI-compatible
-# endpoint - see [ollama] below). Used for every other LLM stage: chapter
-# segmentation, extraction, story bible, fantasy prose writing, and the
-# continuity pass.
-provider = "openrouter"
-# Used when provider = "openrouter". Swap in "anthropic/claude-opus-5" for
-# higher-quality (and pricier) prose.
-openrouter_model = "anthropic/claude-sonnet-5"
-# Used when provider = "ollama". Must already be pulled on that server
-# (`ollama pull llama3.1:70b`).
-ollama_model = "llama3.1:70b"
-
-[ollama]
-# Only used when writing.provider = "ollama". Point this at an Ollama
-# server you already have running. For Docker, use
-# "http://host.docker.internal:11434" (docker-compose.yml adds the
-# extra_hosts entry that makes this resolve on Linux too).
-base_url = "http://localhost:11434"
 
 [paths]
 projects_dir = "projects"

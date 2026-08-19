@@ -65,7 +65,13 @@ def _transcribe_chunk_openrouter(chunk: AudioChunk, config: Config) -> list[Tran
             ],
         },
     ]
-    content = chat_completion(config, config.transcription_model, messages, max_tokens=8192)
+    # Generous budget - a dense/long chunk's segmented JSON transcript
+    # (timestamps + speaker labels + text) can need well more than a
+    # modest budget before finishing; a truncated response is now
+    # detected and retried (see http_utils.post_chat_completion), but
+    # starting with enough headroom avoids relying on that. If a project
+    # still hits "length" here, lower audio.chunk_minutes in its config.
+    content = chat_completion(config, config.transcription_model, messages, max_tokens=32768)
     raw_segments = _parse_segments(content)
 
     return [

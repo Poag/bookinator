@@ -10,8 +10,7 @@ def post_chat_completion(
 ) -> str:
     """POST an OpenAI-compatible chat completion request, with retries.
 
-    Shared by openrouter.py and ollama.py - both providers speak the same
-    request/response shape, so only the URL/headers/model differ.
+    Used by openrouter.py for transcription.
     """
     last_error: Exception | None = None
     for attempt in range(4):
@@ -25,8 +24,8 @@ def post_chat_completion(
 
         if not resp.ok:
             # requests' own HTTPError message discards the response body,
-            # which is exactly where OpenRouter/Ollama put the actual
-            # reason ({"error": {...}}) - include it so the failure is
+            # which is exactly where OpenRouter puts the actual reason
+            # ({"error": {...}}) - include it so the failure is
             # diagnosable instead of a bare "400 Client Error".
             error = RuntimeError(f"{resp.status_code} {resp.reason}: {resp.text[:1000]}")
             last_error = error
@@ -44,16 +43,19 @@ def post_chat_completion(
             data = resp.json()
             choice = data["choices"][0]
             content = choice["message"].get("content")
-            if not content:
+            finish_reason = choice.get("finish_reason")
+            if not content or finish_reason == "length":
                 # Some providers return HTTP 200 with a null/empty content
                 # string instead of raising - e.g. the model ran out of
-                # max_tokens before producing a final answer (finish_reason
-                # "length"), or was filtered/refused. Treat it as a failure
-                # worth retrying rather than crashing on the caller's
-                # .strip() with an opaque AttributeError.
+                # max_tokens before producing a final answer, or was
+                # filtered/refused. A non-empty but "length"-truncated
+                # response is just as unusable (and, for JSON-shaped
+                # replies, invalid) - treat both as a failure worth
+                # retrying rather than silently returning cut-off content.
                 raise RuntimeError(
-                    f"empty response content (finish_reason={choice.get('finish_reason')!r}, "
-                    f"message keys={sorted(choice['message'].keys())})"
+                    f"incomplete response (finish_reason={finish_reason!r}, "
+                    f"content_length={len(content or '')}) - the model likely "
+                    "ran out of max_tokens"
                 )
             return content
         except Exception as exc:  # noqa: BLE001 - retry any transient failure

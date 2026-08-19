@@ -37,7 +37,7 @@ def cmd_status(args: argparse.Namespace, config: Config) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="bookinator", description="Podcast -> fantasy novel pipeline")
+    parser = argparse.ArgumentParser(prog="bookinator", description="Podcast mp3 -> transcript")
     parser.add_argument("--config", type=Path, default=None, help="Path to config.toml")
     sub = parser.add_subparsers(dest="command", required=True)
 

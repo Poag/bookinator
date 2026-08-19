@@ -26,13 +26,6 @@ class Config:
     local_whisper_device: str = "cpu"
     local_whisper_compute_type: str = "int8"
 
-    # Stages 3-7 (text/creative). provider = "openrouter" or "ollama" (a
-    # self-hosted Ollama server's OpenAI-compatible endpoint).
-    writing_provider: str = "openrouter"
-    writing_model: str = "anthropic/claude-sonnet-5"  # used when provider == "openrouter"
-    ollama_writing_model: str = "llama3.1:70b"  # used when provider == "ollama"
-    ollama_base_url: str = "http://localhost:11434"
-
     openrouter_api_key: str = ""
     projects_dir: Path = PACKAGE_ROOT / "projects"
 
@@ -42,10 +35,10 @@ class Config:
 
         A config.toml is optional (handy for a self-contained Docker deploy
         where only OPENROUTER_API_KEY needs to be supplied) unless you're
-        opting into the "local"/"ollama" providers, which are configured
-        entirely in config.toml (no secrets involved). It lives in its own
-        config/ directory so the whole directory can be bind-mounted as one
-        Docker volume (see docker-compose.yml).
+        opting into the "local" provider, which is configured entirely in
+        config.toml (no secrets involved). It lives in its own config/
+        directory so the whole directory can be bind-mounted as one Docker
+        volume (see docker-compose.yml).
         """
         load_dotenv()
         path = config_path or (CONFIG_DIR / "config.toml")
@@ -56,8 +49,6 @@ class Config:
 
         audio = data.get("audio", {})
         transcription = data.get("transcription", {})
-        writing = data.get("writing", {})
-        ollama_cfg = data.get("ollama", {})
         paths = data.get("paths", {})
         defaults = cls()
 
@@ -66,12 +57,6 @@ class Config:
             transcription_model = transcription.get("local_whisper_model", defaults.local_whisper_model)
         else:
             transcription_model = transcription.get("openrouter_model", defaults.transcription_model)
-
-        writing_provider = writing.get("provider", defaults.writing_provider)
-        if writing_provider == "ollama":
-            writing_model = writing.get("ollama_model", defaults.ollama_writing_model)
-        else:
-            writing_model = writing.get("openrouter_model", defaults.writing_model)
 
         return cls(
             ffmpeg_path=audio.get("ffmpeg_path", defaults.ffmpeg_path),
@@ -87,10 +72,6 @@ class Config:
             local_whisper_compute_type=transcription.get(
                 "local_whisper_compute_type", defaults.local_whisper_compute_type
             ),
-            writing_provider=writing_provider,
-            writing_model=writing_model,
-            ollama_writing_model=writing.get("ollama_model", defaults.ollama_writing_model),
-            ollama_base_url=ollama_cfg.get("base_url", defaults.ollama_base_url),
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
             projects_dir=Path(paths.get("projects_dir", str(defaults.projects_dir))),
         )

@@ -7,26 +7,13 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 def chat_completion(
-    config: Config,
-    model: str,
-    messages: list[dict],
-    max_tokens: int = 4096,
-    timeout: int = 600,
-    extra: dict | None = None,
+    config: Config, model: str, messages: list[dict], max_tokens: int = 4096, timeout: int = 600
 ) -> str:
-    """Call OpenRouter's chat completions endpoint and return the reply text.
-
-    Used for whichever role (transcription/writing) has its provider set to
-    "openrouter" in config. `extra` is merged into the request body as-is -
-    e.g. llm.py sets {"reasoning": {"enabled": False}} for the text/JSON
-    stages; transcribe.py's audio-multimodal calls pass nothing.
-    """
+    """Call OpenRouter's chat completions endpoint and return the reply text."""
     if not config.openrouter_api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
 
     payload = {"model": model, "messages": messages, "max_tokens": max_tokens}
-    if extra:
-        payload.update(extra)
     headers = {
         "Authorization": f"Bearer {config.openrouter_api_key}",
         "Content-Type": "application/json",
