@@ -1,0 +1,14 @@
+# Local config & secrets
+config.toml
+.env
+
+# Generated project data (audio, transcripts, drafts) - not checked into git
+projects/*
+!projects/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/

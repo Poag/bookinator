@@ -1,0 +1,11 @@
+services:
+  bookinator:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./projects:/app/projects
+    restart: unless-stopped

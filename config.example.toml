@@ -1,0 +1,27 @@
+# Optional. Copy to config.toml (in the Bookinator/ project root) and edit
+# as needed. Everything here has a built-in default, so config.toml can be
+# omitted entirely (e.g. in the Docker image) and overridden with env vars
+# instead. API keys are always read from the environment / .env, never from
+# this file - see .env.example.
+
+[audio]
+# The Docker image installs ffmpeg/ffprobe on PATH, so the defaults just
+# work there. For a native (non-Docker) run on Windows, point these at the
+# existing install, e.g.:
+# ffmpeg_path = "C:\\Tools\\FFMpeg\\ffmpeg.exe"
+# ffprobe_path = "C:\\Tools\\FFMpeg\\ffprobe.exe"
+ffmpeg_path = "ffmpeg"
+ffprobe_path = "ffprobe"
+chunk_minutes = 12
+chunk_overlap_seconds = 5
+
+[openrouter]
+# Any audio-capable multimodal model available on OpenRouter, e.g. a Gemini model.
+model = "google/gemini-2.5-flash"
+
+[anthropic]
+# Best long-form creative prose; swap in a larger model if quality needs it.
+model = "claude-sonnet-5"
+
+[paths]
+projects_dir = "projects"
