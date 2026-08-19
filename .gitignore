@@ -1,6 +1,7 @@
 # Local config & secrets
-config.toml
 .env
+config/*
+!config/.gitkeep
 
 # Generated project data (audio, transcripts, drafts) - not checked into git
 projects/*

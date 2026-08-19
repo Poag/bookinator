@@ -16,6 +16,10 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./projects:/app/projects
+      # Whole-folder mount, not a single-file one - drop config.toml in
+      # ./config/ locally and it appears at /app/config/config.toml, no
+      # compose edits needed.
+      - ./config:/app/config
       # Persists downloaded faster-whisper/Hugging Face model weights
       # across restarts so they aren't re-fetched every time.
       - whisper-cache:/root/.cache/huggingface

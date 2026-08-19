@@ -1,5 +1,6 @@
-# Optional. Copy to config.toml (in the Bookinator/ project root) and edit
-# as needed. Everything here has a built-in default, so config.toml can be
+# Optional. Copy to config/config.toml (in this repo's root - the config/
+# directory is bind-mounted as a whole in docker-compose.yml) and edit as
+# needed. Everything here has a built-in default, so config.toml can be
 # omitted entirely (e.g. in the Docker image) if you're happy with the
 # OpenRouter defaults below - only OPENROUTER_API_KEY is then required (see
 # .env.example). Switching either stage to a local provider (transcription

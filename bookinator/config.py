@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_DIR = PACKAGE_ROOT / "config"
 
 
 @dataclass
@@ -37,15 +38,17 @@ class Config:
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> "Config":
-        """Load config.toml if present, falling back to built-in defaults.
+        """Load config/config.toml if present, falling back to built-in defaults.
 
         A config.toml is optional (handy for a self-contained Docker deploy
         where only OPENROUTER_API_KEY needs to be supplied) unless you're
         opting into the "local"/"ollama" providers, which are configured
-        entirely in config.toml (no secrets involved).
+        entirely in config.toml (no secrets involved). It lives in its own
+        config/ directory so the whole directory can be bind-mounted as one
+        Docker volume (see docker-compose.yml).
         """
         load_dotenv()
-        path = config_path or (PACKAGE_ROOT / "config.toml")
+        path = config_path or (CONFIG_DIR / "config.toml")
         data: dict = {}
         if path.exists():
             with open(path, "rb") as f:

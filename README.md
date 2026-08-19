@@ -66,18 +66,18 @@ audio and every generated artifact are persisted under `./projects/`, which
 is bind-mounted into the container.
 
 No `config.toml` is required - the image installs ffmpeg on `PATH` and uses
-sensible defaults for everything else. See `config.example.toml` if you
-want to override the chunk length, model names, providers, etc.: copy it to
-`config.toml` in this directory, then bind-mount it into the container by
-adding `- ./config.toml:/app/config.toml` under `volumes:` in
-`docker-compose.yml` (no rebuild needed - it's read at startup).
+sensible defaults for everything else. `./config/` is already bind-mounted
+to `/app/config` in `docker-compose.yml` (same pattern as `./projects/`),
+so to override the chunk length, model names, providers, etc., just copy
+`config.example.toml` to `config/config.toml` in this directory - no
+compose edits or rebuild needed, it's read at startup.
 
 ## Running it without Docker
 
 ```bash
 pip install -e .
 cp .env.example .env   # and fill in OPENROUTER_API_KEY
-cp config.example.toml config.toml  # optional; edit ffmpeg_path etc.
+cp config.example.toml config/config.toml  # optional; edit ffmpeg_path etc.
 
 # Web UI
 uvicorn bookinator.webapp:app --reload
