@@ -29,14 +29,17 @@ mp3 -> [1] chunk & normalize (ffmpeg)
      -> [8] assemble manuscript.md + table of contents
 ```
 
-Transcription (stage 2) and writing (stages 3-7) each have an independent
-provider switch in `config.toml` (see `config.example.toml`):
-`[transcription] provider` is `"openrouter"` (default - an audio-capable
-multimodal model, e.g. Gemini) or `"local"` (`faster-whisper`, runs
-in-process, no network needed after the model is downloaded once).
-`[writing] provider` is `"openrouter"` (default - `anthropic/claude-sonnet-5`
-via OpenRouter) or `"ollama"` (a self-hosted Ollama server). Mix and match
-freely - e.g. cloud transcription with local writing, or vice versa.
+Every LLM-calling stage - transcription plus each of chapterize/extract/
+bible/write/continuity - has its own provider+model, defaulting to
+`config.toml` (see `config.example.toml`): transcription is
+`"openrouter"` (an audio-capable multimodal model, e.g. Gemini) or
+`"local"` (`faster-whisper`, runs in-process); the rest are `"openrouter"`
+(default - `anthropic/claude-sonnet-5`) or `"ollama"` (a self-hosted
+server). Each project can independently override any of these six from
+its dashboard's **Routing settings** page - e.g. run transcription and
+extraction on OpenRouter but writing and the story bible on a local Ollama
+model, for this project only. Fields left blank inherit the global
+`config.toml` default, so most projects need no overrides at all.
 
 Stages 1-2 operate on a single mp3 at a time; stages 3-8 work over one
 project's transcript. The initial version targets one mp3 -> one book;
@@ -157,6 +160,7 @@ have a GPU or don't mind the wait.
 ```
 projects/<project-name>/
 ├── raw/                 # source mp3
+├── settings.json        # per-project provider/model overrides (optional)
 ├── transcript/
 │   ├── audio_chunks/    # normalized audio + per-chunk mp3s + chunks.json manifest
 │   ├── chunks/          # cached per-chunk transcription JSON (resumability)
@@ -170,6 +174,19 @@ projects/<project-name>/
 ├── continuity_report.md
 └── manuscript.md
 ```
+
+## Editing artifacts in the UI
+
+Every artifact link on a project's dashboard (`chapters.json`, `notes.json`,
+`bible.json`, chapter drafts, `manuscript.md`) opens a plain-text editor
+instead of just a viewer. Saving `chapters.json`, `notes.json`, or
+`bible.json` validates the content against its schema first - an invalid
+edit is rejected with an inline error and the file on disk is left
+untouched; chapter drafts and the manuscript are freeform Markdown, so
+anything goes. There's no dependency tracking between stages, so editing
+an upstream file (e.g. fixing a plot point in `notes.json`) doesn't
+automatically redo downstream work - re-run whichever later stages should
+pick up the change.
 
 ## Verification workflow
 

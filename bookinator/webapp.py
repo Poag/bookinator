@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import shutil
 import tempfile
 import threading
@@ -8,10 +9,10 @@ import traceback
 import urllib.parse
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
-from . import pipeline
+from . import models, pipeline, project_settings
 from .config import Config
 
 app = FastAPI(title="Bookinator")
@@ -126,7 +127,30 @@ button.primary:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 .stage-status { font-size: 0.76rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .stage-status.done { color: var(--green); }
 .stage-status.running { color: var(--amber); }
+.stage-routing { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.1rem; }
 form.inline { display: inline; }
+.crumbs { color: var(--text-muted); }
+select {
+       padding: 0.55rem 0.7rem; border-radius: 0.55rem; border: 1px solid var(--border);
+       background: var(--bg); color: var(--text); font-size: 0.9rem; font-family: inherit; }
+.settings-form { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.1rem; }
+.settings-row { display: flex; flex-direction: column; gap: 0.4rem; }
+.settings-row + .settings-row { border-top: 1px solid var(--border); padding-top: 1.1rem; }
+.settings-label { font-weight: 700; font-size: 0.9rem; }
+.settings-fields { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.settings-fields select { flex: none; }
+.settings-fields input[type="text"] {
+       flex: 1; min-width: 12rem; padding: 0.55rem 0.7rem; border-radius: 0.55rem;
+       border: 1px solid var(--border); background: var(--bg); color: var(--text);
+       font-size: 0.9rem; font-family: inherit; }
+.settings-hint { font-size: 0.78rem; color: var(--text-muted); }
+.editor-note { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem; }
+textarea.editor {
+       width: 100%; min-height: 55vh; padding: 0.9rem 1rem; border-radius: var(--radius);
+       border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text);
+       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+       font-size: 0.85rem; line-height: 1.5; resize: vertical; }
+.editor-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.9rem; }
 .log-window { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
 .log-titlebar { background: #2a2438; padding: 0.55rem 0.8rem; display: flex; gap: 0.4rem; }
 .log-dot { width: 0.6rem; height: 0.6rem; border-radius: 999px; }
@@ -240,6 +264,7 @@ def project_dashboard(name: str) -> HTMLResponse:
 
     status = pipeline.stage_status(paths)
     job = _job(name)
+    settings = project_settings.load_project_settings(paths.base)
 
     stage_rows = []
     for i, stage in enumerate(pipeline.STAGES, start=1):
@@ -249,12 +274,15 @@ def project_dashboard(name: str) -> HTMLResponse:
         state_text = "running" if is_running else ("done" if done else "not started")
         marker = "&check;" if state == "done" else ('<span class="dot"></span>' if state == "running" else str(i))
         disabled = "disabled" if job["running"] else ""
+        routing = pipeline.describe_stage_routing(_config, settings, stage)
+        routing_html = f'<div class="stage-routing">{html.escape(routing)}</div>' if routing else ""
         stage_rows.append(f"""
         <div class="stage">
           <div class="stage-marker {state}">{marker}</div>
           <div class="stage-info">
             <div class="stage-name">{html.escape(pipeline.STAGE_LABELS[stage])}</div>
             <div class="stage-status {state}">{state_text}</div>
+            {routing_html}
           </div>
           <form class="inline" action="/projects/{html.escape(name)}/run/{stage}" method="post">
             <button {disabled}>{'Re-run' if done else 'Run'}</button>
@@ -282,14 +310,15 @@ def project_dashboard(name: str) -> HTMLResponse:
     if paths.manuscript.exists():
         artifacts.append(("manuscript.md", "manuscript.md"))
     artifacts_html = "".join(
-        f'<a href="/projects/{html.escape(name)}/file/{rel}" target="_blank">'
+        f'<a href="/projects/{html.escape(name)}/edit/{rel}">'
         f'\U0001f4c4 {html.escape(label)}</a>'
         for label, rel in artifacts
     ) or '<span class="empty-inline">No artifacts yet.</span>'
 
     disabled_all = "disabled" if job["running"] else ""
     body = f"""
-    <p><a href="/">&larr; All projects</a></p>
+    <p class="crumbs"><a href="/">&larr; All projects</a> &middot;
+    <a href="/projects/{html.escape(name)}/settings">Routing settings</a></p>
     <h1>{html.escape(name)}</h1>
     <div class="run-all-row">
       <form action="/projects/{html.escape(name)}/run-all" method="post">
@@ -336,6 +365,126 @@ def run_all(name: str) -> RedirectResponse:
     status = pipeline.stage_status(paths)
     remaining = [s for s in pipeline.STAGES if not status[s]]
     _run_in_background(name, remaining or pipeline.STAGES)
+    return RedirectResponse(f"/projects/{name}", status_code=303)
+
+
+def _global_default_for_role(config: Config, role: str) -> str:
+    if role == "transcription":
+        return f"{config.transcription_provider} · {config.transcription_model}"
+    return f"{config.writing_provider} · {config.writing_model}"
+
+
+@app.get("/projects/{name}/settings", response_class=HTMLResponse)
+def project_settings_page(name: str) -> HTMLResponse:
+    paths = pipeline.ProjectPaths.for_project(_config, name)
+    if not paths.base.exists():
+        raise HTTPException(404, "Project not found")
+
+    settings = project_settings.load_project_settings(paths.base)
+    rows = []
+    for role, label in project_settings.ROLE_LABELS.items():
+        override = getattr(settings, role)
+        options = ['<option value="">(inherit from global config)</option>']
+        for p in project_settings.ROLE_PROVIDERS[role]:
+            selected = "selected" if p == override.provider else ""
+            options.append(f'<option value="{p}" {selected}>{p}</option>')
+        model_value = html.escape(override.model or "")
+        rows.append(f"""
+        <div class="settings-row">
+          <div class="settings-label">{html.escape(label)}</div>
+          <div class="settings-fields">
+            <select name="{role}_provider">{"".join(options)}</select>
+            <input type="text" name="{role}_model" value="{model_value}" placeholder="model (blank = inherit)">
+          </div>
+          <div class="settings-hint">Global default: {html.escape(_global_default_for_role(_config, role))}</div>
+        </div>""")
+
+    body = f"""
+    <p class="crumbs"><a href="/projects/{html.escape(name)}">&larr; {html.escape(name)}</a></p>
+    <h1>Routing settings</h1>
+    <p class="tagline">Override which provider and model each stage uses for this project.
+    Leave a field blank to inherit the global config.</p>
+    <form class="card settings-form" method="post" action="/projects/{html.escape(name)}/settings">
+      {"".join(rows)}
+      <button type="submit" class="primary">Save settings</button>
+    </form>
+    """
+    return render_page(f"Bookinator - {name} - Settings", body)
+
+
+@app.post("/projects/{name}/settings")
+async def save_project_settings_route(name: str, request: Request) -> RedirectResponse:
+    paths = pipeline.ProjectPaths.for_project(_config, name)
+    if not paths.base.exists():
+        raise HTTPException(404, "Project not found")
+
+    form = await request.form()
+    overrides = {}
+    for role in project_settings.ROLE_LABELS:
+        provider = (str(form.get(f"{role}_provider") or "")).strip() or None
+        model = (str(form.get(f"{role}_model") or "")).strip() or None
+        overrides[role] = project_settings.StageOverride(provider=provider, model=model)
+    project_settings.save_project_settings(paths.base, project_settings.ProjectSettings(**overrides))
+    return RedirectResponse(f"/projects/{name}/settings", status_code=303)
+
+
+def _validate_editable_file(rel_path: str, text: str) -> None:
+    """Raise if text doesn't match the schema expected for a known artifact.
+
+    No-op for freeform files (chapter drafts, manuscript.md) - there's
+    nothing to validate there.
+    """
+    if rel_path == "chapters/chapters.json":
+        models.ChaptersFile.model_validate_json(text)
+    elif rel_path == "chapters/notes.json":
+        data = json.loads(text)
+        if not isinstance(data, list):
+            raise ValueError("notes.json must be a JSON array of per-chapter notes")
+        for item in data:
+            models.ChapterNotes(**item)
+    elif rel_path == "bible.json":
+        models.StoryBible.model_validate_json(text)
+
+
+def _render_edit_page(name: str, rel_path: str, content: str, error: str | None = None) -> HTMLResponse:
+    error_html = f'<div class="error-box">{html.escape(error)}</div>' if error else ""
+    body = f"""
+    <p class="crumbs"><a href="/projects/{html.escape(name)}">&larr; {html.escape(name)}</a></p>
+    <h1>{html.escape(rel_path)}</h1>
+    <p class="editor-note">Editing this file directly may make outputs from later stages
+    stale - re-run any affected stages after saving.</p>
+    {error_html}
+    <form method="post" action="/projects/{html.escape(name)}/edit/{rel_path}">
+      <textarea name="content" class="editor" spellcheck="false">{html.escape(content)}</textarea>
+      <div class="editor-actions">
+        <button type="submit" class="primary">Save</button>
+        <a href="/projects/{html.escape(name)}/file/{rel_path}" target="_blank">View raw</a>
+      </div>
+    </form>
+    """
+    return render_page(f"Bookinator - {name} - {rel_path}", body)
+
+
+@app.get("/projects/{name}/edit/{rel_path:path}", response_class=HTMLResponse)
+def edit_file(name: str, rel_path: str) -> HTMLResponse:
+    paths = pipeline.ProjectPaths.for_project(_config, name)
+    target = (paths.base / rel_path).resolve()
+    if not str(target).startswith(str(paths.base.resolve())) or not target.is_file():
+        raise HTTPException(404, "File not found")
+    return _render_edit_page(name, rel_path, target.read_text())
+
+
+@app.post("/projects/{name}/edit/{rel_path:path}", response_class=HTMLResponse)
+def save_edited_file(name: str, rel_path: str, content: str = Form(...)):
+    paths = pipeline.ProjectPaths.for_project(_config, name)
+    target = (paths.base / rel_path).resolve()
+    if not str(target).startswith(str(paths.base.resolve())) or not target.is_file():
+        raise HTTPException(404, "File not found")
+    try:
+        _validate_editable_file(rel_path, content)
+    except Exception as exc:  # noqa: BLE001
+        return _render_edit_page(name, rel_path, content, error=f"Not saved - invalid content: {exc}")
+    target.write_text(content)
     return RedirectResponse(f"/projects/{name}", status_code=303)
 
 

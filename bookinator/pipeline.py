@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from .config import Config
 from .continuity import run_continuity_pass
 from .extract import extract_project
 from .models import AudioChunk
+from .project_settings import ProjectSettings, load_project_settings
 from .transcribe import transcribe_project
 from .write import write_project
 
@@ -20,14 +22,70 @@ STAGES = ["chunk", "transcribe", "chapterize", "extract", "bible", "write", "con
 
 STAGE_LABELS = {
     "chunk": "1. Chunk & normalize audio",
-    "transcribe": "2. Transcribe (OpenRouter)",
+    "transcribe": "2. Transcribe",
     "chapterize": "3. Segment into chapters",
     "extract": "4. Extract plot points / jokes / quotes",
     "bible": "5. Build story bible",
-    "write": "6. Write fantasy prose (OpenRouter)",
+    "write": "6. Write fantasy prose",
     "continuity": "7. Continuity pass",
     "assemble": "8. Assemble manuscript",
 }
+
+# Stages that call an LLM, mapped to their ProjectSettings role name. "chunk"
+# and "assemble" are local-only (ffmpeg / file assembly) and have no role.
+STAGE_ROLES = {
+    "transcribe": "transcription",
+    "chapterize": "chapterize",
+    "extract": "extract",
+    "bible": "bible",
+    "write": "write",
+    "continuity": "continuity",
+}
+
+
+def resolve_config_for_stage(config: Config, settings: ProjectSettings, stage: str) -> Config:
+    """Apply a project's per-stage provider/model override (if any) to config.
+
+    Fields left as None in the override inherit the global config.toml
+    default unchanged. Stages are still free to route independently -
+    e.g. transcription can go "local" while "write" goes "ollama" and
+    "bible" stays on the global "openrouter" default.
+    """
+    role = STAGE_ROLES.get(stage)
+    if role is None:
+        return config
+    override = getattr(settings, role)
+
+    updates: dict = {}
+    if role == "transcription":
+        if override.provider:
+            updates["transcription_provider"] = override.provider
+        if override.model:
+            updates["transcription_model"] = override.model
+    else:
+        if override.provider:
+            updates["writing_provider"] = override.provider
+        if override.model:
+            updates["writing_model"] = override.model
+
+    return dataclasses.replace(config, **updates) if updates else config
+
+
+def describe_stage_routing(config: Config, settings: ProjectSettings, stage: str) -> str | None:
+    """Human-readable "provider / model" a stage will actually run with.
+
+    None for stages with no LLM role (chunk, assemble). Reflects whatever
+    resolve_config_for_stage() would apply, so it stays in sync with what
+    actually runs - including inherited (unset) fields falling back to the
+    global config.
+    """
+    role = STAGE_ROLES.get(stage)
+    if role is None:
+        return None
+    resolved = resolve_config_for_stage(config, settings, stage)
+    if role == "transcription":
+        return f"{resolved.transcription_provider} · {resolved.transcription_model}"
+    return f"{resolved.writing_provider} · {resolved.writing_model}"
 
 
 @dataclass
@@ -100,6 +158,8 @@ def stage_status(paths: ProjectPaths) -> dict[str, bool]:
 def run_stage(config: Config, name: str, stage: str) -> str:
     """Run a single named stage for a project, returning a short result message."""
     paths = ProjectPaths.for_project(config, name)
+    settings = load_project_settings(paths.base)
+    config = resolve_config_for_stage(config, settings, stage)
 
     if stage == "chunk":
         mp3 = find_source_mp3(paths)
