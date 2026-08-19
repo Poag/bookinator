@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .llm import call_text_json
+from .llm import call_text_json, require_object_list
 from .models import ChapterMeta, ChapterNotes, ChaptersFile, Joke, PlotPoint, Quote, Transcript
 
 SYSTEM_PROMPT = (
@@ -34,9 +34,9 @@ def extract_chapter_notes(chapter: ChapterMeta, transcript: Transcript, config: 
     raw = call_text_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
     return ChapterNotes(
         chapter_index=chapter.index,
-        plot_points=[PlotPoint(**p) for p in raw.get("plot_points", [])],
-        jokes=[Joke(**j) for j in raw.get("jokes", [])],
-        quotes=[Quote(**q) for q in raw.get("quotes", [])],
+        plot_points=[PlotPoint(**p) for p in require_object_list(raw.get("plot_points", []), "plot_points")],
+        jokes=[Joke(**j) for j in require_object_list(raw.get("jokes", []), "jokes")],
+        quotes=[Quote(**q) for q in require_object_list(raw.get("quotes", []), "quotes")],
     )
 
 

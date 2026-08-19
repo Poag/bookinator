@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .llm import call_text_json
+from .llm import call_text_json, require_object_list
 from .models import CharacterMapping, ChapterNotes, StoryBible
 
 SYSTEM_PROMPT = (
@@ -43,7 +43,9 @@ def build_bible(all_notes: list[ChapterNotes], config: Config) -> StoryBible:
         setting=raw["setting"],
         tone=raw["tone"],
         naming_conventions=raw["naming_conventions"],
-        characters=[CharacterMapping(**c) for c in raw.get("characters", [])],
+        characters=[
+            CharacterMapping(**c) for c in require_object_list(raw.get("characters", []), "characters")
+        ],
         notes=raw.get("notes", ""),
     )
 
