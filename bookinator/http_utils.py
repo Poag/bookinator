@@ -17,7 +17,30 @@ def post_chat_completion(
     for attempt in range(4):
         try:
             resp = requests.post(url, headers=headers or {}, json=payload, timeout=timeout)
-            resp.raise_for_status()
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(2**attempt)
+            continue
+
+        if not resp.ok:
+            # requests' own HTTPError message discards the response body,
+            # which is exactly where OpenRouter/Ollama put the actual
+            # reason ({"error": {...}}) - include it so the failure is
+            # diagnosable instead of a bare "400 Client Error".
+            error = RuntimeError(f"{resp.status_code} {resp.reason}: {resp.text[:1000]}")
+            last_error = error
+            # A 4xx other than 429 (rate limit) means the request itself
+            # is malformed/rejected - retrying the identical payload would
+            # just fail the same way again, so fail fast instead of
+            # burning ~14s of backoff on a request that can't succeed.
+            if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                raise error
+            if attempt < 3:
+                time.sleep(2**attempt)
+            continue
+
+        try:
             data = resp.json()
             choice = data["choices"][0]
             content = choice["message"].get("content")
@@ -37,4 +60,5 @@ def post_chat_completion(
             last_error = exc
             if attempt < 3:
                 time.sleep(2**attempt)
+
     raise RuntimeError(f"Chat completion call failed (url={url}): {last_error}")

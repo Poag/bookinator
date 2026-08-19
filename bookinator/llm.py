@@ -20,7 +20,22 @@ def call_text(config: Config, system: str, user: str, max_tokens: int = 4096) ->
         {"role": "user", "content": user},
     ]
     module = _provider_module(config.writing_provider)
-    return module.chat_completion(config, config.writing_model, messages, max_tokens=max_tokens)
+    # Reasoning-capable models (e.g. Claude Sonnet 5) default to extended
+    # thinking on via OpenRouter, and thinking tokens count against this
+    # same max_tokens budget - for our structured-output and prose tasks
+    # that just burns the budget on invisible reasoning before any real
+    # content comes out (seen as either null content or output truncated
+    # after a handful of characters). None of these prompts need visible
+    # chain-of-thought, so turn it off. Scoped to text calls only -
+    # transcribe.py's audio calls don't pass this, since Gemini's
+    # audio-input path rejected it with a 400.
+    return module.chat_completion(
+        config,
+        config.writing_model,
+        messages,
+        max_tokens=max_tokens,
+        extra={"reasoning": {"enabled": False}},
+    )
 
 
 def call_text_json(config: Config, system: str, user: str, max_tokens: int = 4096, attempts: int = 3):
