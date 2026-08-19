@@ -18,7 +18,21 @@ def post_chat_completion(
         try:
             resp = requests.post(url, headers=headers or {}, json=payload, timeout=timeout)
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            data = resp.json()
+            choice = data["choices"][0]
+            content = choice["message"].get("content")
+            if not content:
+                # Some providers return HTTP 200 with a null/empty content
+                # string instead of raising - e.g. the model ran out of
+                # max_tokens before producing a final answer (finish_reason
+                # "length"), or was filtered/refused. Treat it as a failure
+                # worth retrying rather than crashing on the caller's
+                # .strip() with an opaque AttributeError.
+                raise RuntimeError(
+                    f"empty response content (finish_reason={choice.get('finish_reason')!r}, "
+                    f"message keys={sorted(choice['message'].keys())})"
+                )
+            return content
         except Exception as exc:  # noqa: BLE001 - retry any transient failure
             last_error = exc
             if attempt < 3:
