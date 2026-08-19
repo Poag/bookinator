@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import Config
+from .local_transcribe import transcribe_chunk_local
 from .models import AudioChunk, Transcript, TranscriptSegment
 from .openrouter import chat_completion
 
@@ -45,12 +46,7 @@ def _parse_segments(content: str) -> list[dict]:
     return [{"start": 0.0, "end": 0.0, "speaker": None, "text": content.strip()}]
 
 
-def transcribe_chunk(chunk: AudioChunk, config: Config, cache_dir: Path) -> list[TranscriptSegment]:
-    cache_path = cache_dir / f"chunk_{chunk.index:03d}.json"
-    if cache_path.exists():
-        data = json.loads(cache_path.read_text())
-        return [TranscriptSegment(**s) for s in data]
-
+def _transcribe_chunk_openrouter(chunk: AudioChunk, config: Config) -> list[TranscriptSegment]:
     audio_bytes = Path(chunk.path).read_bytes()
     b64 = base64.b64encode(audio_bytes).decode("ascii")
 
@@ -72,7 +68,7 @@ def transcribe_chunk(chunk: AudioChunk, config: Config, cache_dir: Path) -> list
     content = chat_completion(config, config.transcription_model, messages, max_tokens=8192)
     raw_segments = _parse_segments(content)
 
-    segments = [
+    return [
         TranscriptSegment(
             start=chunk.start_offset + s["start"],
             end=chunk.start_offset + s["end"],
@@ -81,6 +77,18 @@ def transcribe_chunk(chunk: AudioChunk, config: Config, cache_dir: Path) -> list
         )
         for s in raw_segments
     ]
+
+
+def transcribe_chunk(chunk: AudioChunk, config: Config, cache_dir: Path) -> list[TranscriptSegment]:
+    cache_path = cache_dir / f"chunk_{chunk.index:03d}.json"
+    if cache_path.exists():
+        data = json.loads(cache_path.read_text())
+        return [TranscriptSegment(**s) for s in data]
+
+    if config.transcription_provider == "local":
+        segments = transcribe_chunk_local(chunk, config)
+    else:
+        segments = _transcribe_chunk_openrouter(chunk, config)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps([s.model_dump() for s in segments], indent=2))

@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import json
 
+from . import ollama, openrouter
 from .config import Config
-from .openrouter import chat_completion
+
+
+def _provider_module(provider: str):
+    if provider == "ollama":
+        return ollama
+    if provider == "openrouter":
+        return openrouter
+    raise ValueError(f"Unknown writing_provider: {provider!r}")
 
 
 def call_text(config: Config, system: str, user: str, max_tokens: int = 4096) -> str:
@@ -11,7 +19,8 @@ def call_text(config: Config, system: str, user: str, max_tokens: int = 4096) ->
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
-    return chat_completion(config, config.writing_model, messages, max_tokens=max_tokens)
+    module = _provider_module(config.writing_provider)
+    return module.chat_completion(config, config.writing_model, messages, max_tokens=max_tokens)
 
 
 def call_text_json(config: Config, system: str, user: str, max_tokens: int = 4096):

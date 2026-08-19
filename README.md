@@ -5,13 +5,16 @@ into chapters, and rewrites it as fantasy prose - preserving the real plot
 points, running jokes, and funny moments, just told through fantasy
 characters and a fantasy world instead of "two people talking on a podcast."
 
-Runs as a self-contained Docker image with a web UI. Every LLM call in the
-pipeline goes through OpenRouter, so a single `OPENROUTER_API_KEY` is all
-that's needed. Each pipeline stage writes its output to disk as an
-inspectable JSON/Markdown artifact before the next stage runs, so it's
-resumable and any stage can be re-run on its own (handy since transcription
-and writing cost money - you shouldn't have to re-transcribe just to tweak
-a prose prompt).
+Runs as a self-contained Docker image with a web UI. By default every LLM
+call in the pipeline goes through OpenRouter, so a single
+`OPENROUTER_API_KEY` is all that's needed - but transcription and/or prose
+writing can each be switched to run fully locally instead (see
+[Running fully local](#running-fully-local-ollama--local-transcription)
+below). Each pipeline stage writes its output to disk as an inspectable
+JSON/Markdown artifact before the next stage runs, so it's resumable and
+any stage can be re-run on its own (handy since cloud transcription/writing
+cost money - you shouldn't have to re-transcribe just to tweak a prose
+prompt).
 
 ## Pipeline
 
@@ -26,13 +29,14 @@ mp3 -> [1] chunk & normalize (ffmpeg)
      -> [8] assemble manuscript.md + table of contents
 ```
 
-Every LLM stage goes through OpenRouter, using two configurable model slugs
-(see `config.example.toml`): `transcription_model` - an audio-capable
-multimodal model for stage 2 (e.g. a Gemini model, which accepts audio
-input directly) - and `writing_model` - a text model used for every other
-stage (chapter segmentation, extraction, the story bible, prose writing,
-and the continuity pass), defaulting to `anthropic/claude-sonnet-5` for its
-long-form writing quality but swappable to any OpenRouter text model.
+Transcription (stage 2) and writing (stages 3-7) each have an independent
+provider switch in `config.toml` (see `config.example.toml`):
+`[transcription] provider` is `"openrouter"` (default - an audio-capable
+multimodal model, e.g. Gemini) or `"local"` (`faster-whisper`, runs
+in-process, no network needed after the model is downloaded once).
+`[writing] provider` is `"openrouter"` (default - `anthropic/claude-sonnet-5`
+via OpenRouter) or `"ollama"` (a self-hosted Ollama server). Mix and match
+freely - e.g. cloud transcription with local writing, or vice versa.
 
 Stages 1-2 operate on a single mp3 at a time; stages 3-8 work over one
 project's transcript. The initial version targets one mp3 -> one book;
@@ -88,6 +92,58 @@ bookinator all my-episode path/to/episode.mp3
 `audio.ffprobe_path` in `config.toml` (e.g. to
 `C:\Tools\FFMpeg\ffmpeg.exe` on a Windows box that already has it
 installed).
+
+## Running fully local (Ollama + local transcription)
+
+Both LLM roles can run without any cloud API. Bookinator doesn't bundle
+Ollama - point it at one you already have running.
+
+**Writing via Ollama:**
+
+```bash
+ollama pull llama3.1:70b   # or any other text model you want to write with
+```
+
+```toml
+[writing]
+provider = "ollama"
+ollama_model = "llama3.1:70b"
+
+[ollama]
+base_url = "http://localhost:11434"
+# In Docker: base_url = "http://host.docker.internal:11434"
+# (docker-compose.yml already adds the extra_hosts entry that makes this
+# resolve on Linux, not just Docker Desktop)
+```
+
+Model quality matters here more than in most Ollama use cases - the writing
+stages are asked to hit specific plot points/jokes and return structured
+JSON, so a smaller/weaker model may drift off-task or produce invalid JSON
+more often than Claude does. A large instruction-tuned model (30B+) is a
+safer starting point; a GPU is strongly recommended for that size on
+anything but a short episode - CPU-only inference on a 70B model will be
+very slow.
+
+**Local transcription (no Ollama involved - faster-whisper runs directly
+in the Bookinator process):**
+
+```toml
+[transcription]
+provider = "local"
+local_whisper_model = "small"       # tiny|base|small|medium|large-v3
+local_whisper_device = "cpu"        # or "cuda" with a GPU + CUDA installed
+local_whisper_compute_type = "int8" # "float16" is typical for GPU
+```
+
+The first run downloads the model weights (needs network access once,
+cached afterward - the Docker image persists this cache in a volume). Two
+things are meaningfully different from the OpenRouter/Gemini path: Whisper
+does not do speaker diarization, so every transcript segment has
+`speaker: null` (later stages already treat speaker as optional, so this
+doesn't break anything downstream, it just means chapters/prose can't
+distinguish who said what); and larger models are noticeably slower on
+CPU, so start with `small` or `medium` and only go to `large-v3` if you
+have a GPU or don't mind the wait.
 
 ## Project layout on disk
 

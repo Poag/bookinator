@@ -5,6 +5,18 @@ services:
       - "8000:8000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    extra_hosts:
+      # Lets the container reach an Ollama server running on the host
+      # machine (e.g. config.toml's ollama.base_url set to
+      # http://host.docker.internal:11434). Docker Desktop already
+      # resolves this; on Linux this line is what makes it work.
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./projects:/app/projects
+      # Persists downloaded faster-whisper/Hugging Face model weights
+      # across restarts so they aren't re-fetched every time.
+      - whisper-cache:/root/.cache/huggingface
     restart: unless-stopped
+
+volumes:
+  whisper-cache:
