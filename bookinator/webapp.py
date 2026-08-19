@@ -118,6 +118,7 @@ button.primary:hover:not(:disabled) { filter: brightness(1.15); color: #fff; }
 .stage-marker.done { background: var(--green-bg); border-color: var(--green); color: var(--green); }
 .stage-marker.running { background: var(--amber-bg); border-color: var(--amber); color: var(--amber);
        animation: pulse 1.4s ease-in-out infinite; }
+.stage-marker .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; display: block; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(240,195,77,0.45); }
                    50% { box-shadow: 0 0 0 6px rgba(240,195,77,0); } }
 .stage-info { flex: 1; min-width: 0; }
@@ -246,7 +247,7 @@ def project_dashboard(name: str) -> HTMLResponse:
         is_running = job["running"] and job.get("current_stage") == stage
         state = "running" if is_running else ("done" if done else "pending")
         state_text = "running" if is_running else ("done" if done else "not started")
-        marker = "&check;" if state == "done" else ("&#9679;" if state == "running" else str(i))
+        marker = "&check;" if state == "done" else ('<span class="dot"></span>' if state == "running" else str(i))
         disabled = "disabled" if job["running"] else ""
         stage_rows.append(f"""
         <div class="stage">
