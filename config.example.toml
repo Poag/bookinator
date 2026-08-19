@@ -1,8 +1,8 @@
 # Optional. Copy to config.toml (in the Bookinator/ project root) and edit
 # as needed. Everything here has a built-in default, so config.toml can be
 # omitted entirely (e.g. in the Docker image) and overridden with env vars
-# instead. API keys are always read from the environment / .env, never from
-# this file - see .env.example.
+# instead. Only OPENROUTER_API_KEY is required - every stage of the pipeline
+# calls OpenRouter, so it's the only credential needed. See .env.example.
 
 [audio]
 # The Docker image installs ffmpeg/ffprobe on PATH, so the defaults just
@@ -16,12 +16,13 @@ chunk_minutes = 12
 chunk_overlap_seconds = 5
 
 [openrouter]
-# Any audio-capable multimodal model available on OpenRouter, e.g. a Gemini model.
-model = "google/gemini-2.5-flash"
-
-[anthropic]
-# Best long-form creative prose; swap in a larger model if quality needs it.
-model = "claude-sonnet-5"
+# Audio-capable multimodal model used for transcription (stage 2), e.g. a
+# Gemini model that accepts audio input directly.
+transcription_model = "google/gemini-2.5-flash"
+# Text model used for every other LLM stage: chapter segmentation,
+# extraction, story bible, fantasy prose writing, and the continuity pass.
+# Swap in "anthropic/claude-opus-5" for higher-quality (and pricier) prose.
+writing_model = "anthropic/claude-sonnet-5"
 
 [paths]
 projects_dir = "projects"

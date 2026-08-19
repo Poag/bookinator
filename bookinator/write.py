@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .llm import call_claude
+from .llm import call_text
 from .models import ChapterMeta, ChapterNotes, ChaptersFile, StoryBible
 
 SYSTEM_PROMPT = (
@@ -60,7 +60,7 @@ def write_chapter(
     )
     if prev_chapter_ending:
         user += f"\nPrevious chapter ended with:\n{prev_chapter_ending}\n"
-    return call_claude(config, SYSTEM_PROMPT, user, max_tokens=8192)
+    return call_text(config, SYSTEM_PROMPT, user, max_tokens=8192)
 
 
 def _tail(text: str, chars: int = 1200) -> str:

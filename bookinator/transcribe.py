@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
-import time
 from pathlib import Path
-
-import requests
 
 from .config import Config
 from .models import AudioChunk, Transcript, TranscriptSegment
-
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+from .openrouter import chat_completion
 
 SYSTEM_PROMPT = (
     "You are a precise audio transcriptionist. Transcribe the provided audio "
@@ -55,51 +51,26 @@ def transcribe_chunk(chunk: AudioChunk, config: Config, cache_dir: Path) -> list
         data = json.loads(cache_path.read_text())
         return [TranscriptSegment(**s) for s in data]
 
-    if not config.openrouter_api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
-
     audio_bytes = Path(chunk.path).read_bytes()
     b64 = base64.b64encode(audio_bytes).decode("ascii")
 
-    payload = {
-        "model": config.openrouter_model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_audio",
-                        "input_audio": {
-                            "data": b64,
-                            "format": _audio_format(Path(chunk.path)),
-                        },
-                    }
-                ],
-            },
-        ],
-    }
-    headers = {
-        "Authorization": f"Bearer {config.openrouter_api_key}",
-        "Content-Type": "application/json",
-    }
-
-    last_error: Exception | None = None
-    raw_segments: list[dict] | None = None
-    for attempt in range(4):
-        try:
-            resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=600)
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-            raw_segments = _parse_segments(content)
-            break
-        except Exception as exc:  # noqa: BLE001 - retry any transient failure
-            last_error = exc
-            if attempt < 3:
-                time.sleep(2**attempt)
-
-    if raw_segments is None:
-        raise RuntimeError(f"Transcription failed for chunk {chunk.index}: {last_error}")
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": b64,
+                        "format": _audio_format(Path(chunk.path)),
+                    },
+                }
+            ],
+        },
+    ]
+    content = chat_completion(config, config.transcription_model, messages, max_tokens=8192)
+    raw_segments = _parse_segments(content)
 
     segments = [
         TranscriptSegment(

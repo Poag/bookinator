@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .llm import call_claude_json
+from .llm import call_text_json
 from .models import ChapterMeta, ChapterNotes, ChaptersFile, Joke, PlotPoint, Quote, Transcript
 
 SYSTEM_PROMPT = (
@@ -31,7 +31,7 @@ def _chapter_text(transcript: Transcript, chapter: ChapterMeta) -> str:
 
 def extract_chapter_notes(chapter: ChapterMeta, transcript: Transcript, config: Config) -> ChapterNotes:
     user = f"Chapter: {chapter.title}\n\nTranscript excerpt:\n\n{_chapter_text(transcript, chapter)}"
-    raw = call_claude_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
+    raw = call_text_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
     return ChapterNotes(
         chapter_index=chapter.index,
         plot_points=[PlotPoint(**p) for p in raw.get("plot_points", [])],

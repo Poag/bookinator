@@ -24,7 +24,7 @@ STAGE_LABELS = {
     "chapterize": "3. Segment into chapters",
     "extract": "4. Extract plot points / jokes / quotes",
     "bible": "5. Build story bible",
-    "write": "6. Write fantasy prose (Claude)",
+    "write": "6. Write fantasy prose (OpenRouter)",
     "continuity": "7. Continuity pass",
     "assemble": "8. Assemble manuscript",
 }

@@ -5,12 +5,13 @@ into chapters, and rewrites it as fantasy prose - preserving the real plot
 points, running jokes, and funny moments, just told through fantasy
 characters and a fantasy world instead of "two people talking on a podcast."
 
-Runs as a self-contained Docker image with a web UI. Each pipeline stage
-writes its output to disk as an inspectable JSON/Markdown artifact before
-the next stage runs, so it's resumable and any stage can be re-run on its
-own (handy since the transcription and writing stages cost money via
-OpenRouter/Anthropic - you shouldn't have to re-transcribe just to tweak a
-prose prompt).
+Runs as a self-contained Docker image with a web UI. Every LLM call in the
+pipeline goes through OpenRouter, so a single `OPENROUTER_API_KEY` is all
+that's needed. Each pipeline stage writes its output to disk as an
+inspectable JSON/Markdown artifact before the next stage runs, so it's
+resumable and any stage can be re-run on its own (handy since transcription
+and writing cost money - you shouldn't have to re-transcribe just to tweak
+a prose prompt).
 
 ## Pipeline
 
@@ -20,17 +21,18 @@ mp3 -> [1] chunk & normalize (ffmpeg)
      -> [3] segment into chapters (LLM)                          -> chapters.json
      -> [4] extract plot points / jokes / quotes per chapter (LLM) -> notes.json
      -> [5] build story bible (fantasy world, character mapping)   -> bible.json
-     -> [6] write each chapter as fantasy prose (Claude API)       -> chapter_NN.md
+     -> [6] write each chapter as fantasy prose (OpenRouter, text model) -> chapter_NN.md
      -> [7] continuity pass over the full draft                    -> fixes applied
      -> [8] assemble manuscript.md + table of contents
 ```
 
-Transcription (stage 2) uses an audio-capable multimodal model via
-OpenRouter (e.g. a Gemini model, which accepts audio input directly). Every
-other LLM stage - chapter segmentation, extraction, the story bible, prose
-writing, and the continuity pass - uses the Claude API directly, since
-they're all part of the same "turn this into a good book" job and benefit
-from Claude's long-form writing quality.
+Every LLM stage goes through OpenRouter, using two configurable model slugs
+(see `config.example.toml`): `transcription_model` - an audio-capable
+multimodal model for stage 2 (e.g. a Gemini model, which accepts audio
+input directly) - and `writing_model` - a text model used for every other
+stage (chapter segmentation, extraction, the story bible, prose writing,
+and the continuity pass), defaulting to `anthropic/claude-sonnet-5` for its
+long-form writing quality but swappable to any OpenRouter text model.
 
 Stages 1-2 operate on a single mp3 at a time; stages 3-8 work over one
 project's transcript. The initial version targets one mp3 -> one book;
@@ -41,7 +43,7 @@ build a season -> one book) is a natural extension but isn't wired up yet.
 
 ```bash
 cp .env.example .env
-# edit .env and set OPENROUTER_API_KEY and ANTHROPIC_API_KEY
+# edit .env and set OPENROUTER_API_KEY
 
 docker compose up --build
 ```
@@ -60,7 +62,7 @@ want to override the chunk length, model names, etc.: copy it to
 
 ```bash
 pip install -e .
-cp .env.example .env   # and fill in API keys
+cp .env.example .env   # and fill in OPENROUTER_API_KEY
 cp config.example.toml config.toml  # optional; edit ffmpeg_path etc.
 
 # Web UI

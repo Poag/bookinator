@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .config import Config
-from .llm import call_claude_json
+from .llm import call_text_json
 from .models import CharacterMapping, ChapterNotes, StoryBible
 
 SYSTEM_PROMPT = (
@@ -37,7 +37,7 @@ def _notes_digest(all_notes: list[ChapterNotes]) -> str:
 
 def build_bible(all_notes: list[ChapterNotes], config: Config) -> StoryBible:
     user = "Extracted material from the whole podcast:\n\n" + _notes_digest(all_notes)
-    raw = call_claude_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
+    raw = call_text_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
     return StoryBible(
         world_name=raw["world_name"],
         setting=raw["setting"],

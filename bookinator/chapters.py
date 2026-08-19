@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import Config
-from .llm import call_claude_json
+from .llm import call_text_json
 from .models import ChapterMeta, ChaptersFile, Transcript
 
 SYSTEM_PROMPT = (
@@ -19,7 +19,7 @@ SYSTEM_PROMPT = (
 
 def build_chapters(transcript: Transcript, config: Config) -> ChaptersFile:
     user = "Transcript (each line is [start-end] speaker: text):\n\n" + transcript.full_text
-    raw = call_claude_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
+    raw = call_text_json(config, SYSTEM_PROMPT, user, max_tokens=4096)
     chapters = [
         ChapterMeta(index=i, title=c["title"], summary=c["summary"], start=c["start"], end=c["end"])
         for i, c in enumerate(raw)

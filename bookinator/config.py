@@ -16,10 +16,13 @@ class Config:
     ffprobe_path: str = "ffprobe"
     chunk_minutes: float = 12
     chunk_overlap_seconds: float = 5
-    openrouter_model: str = "google/gemini-2.5-flash"
+    # Audio-capable multimodal model used for transcription (stage 2).
+    transcription_model: str = "google/gemini-2.5-flash"
+    # Text model used for every other LLM stage (chaptering, extraction,
+    # story bible, prose writing, continuity). Both are OpenRouter model
+    # slugs - everything in the pipeline goes through one API key.
+    writing_model: str = "anthropic/claude-sonnet-5"
     openrouter_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5"
-    anthropic_api_key: str = ""
     projects_dir: Path = PACKAGE_ROOT / "projects"
 
     @classmethod
@@ -27,8 +30,7 @@ class Config:
         """Load config.toml if present, falling back to built-in defaults.
 
         A config.toml is optional (handy for a self-contained Docker deploy
-        where only the API key env vars need to be supplied). API keys are
-        always read from the environment / .env, never from config.toml.
+        where only OPENROUTER_API_KEY needs to be supplied).
         """
         load_dotenv()
         path = config_path or (PACKAGE_ROOT / "config.toml")
@@ -39,7 +41,6 @@ class Config:
 
         audio = data.get("audio", {})
         openrouter = data.get("openrouter", {})
-        anthropic = data.get("anthropic", {})
         paths = data.get("paths", {})
         defaults = cls()
 
@@ -50,9 +51,8 @@ class Config:
             chunk_overlap_seconds=float(
                 audio.get("chunk_overlap_seconds", defaults.chunk_overlap_seconds)
             ),
-            openrouter_model=openrouter.get("model", defaults.openrouter_model),
+            transcription_model=openrouter.get("transcription_model", defaults.transcription_model),
+            writing_model=openrouter.get("writing_model", defaults.writing_model),
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-            anthropic_model=anthropic.get("model", defaults.anthropic_model),
-            anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             projects_dir=Path(paths.get("projects_dir", str(defaults.projects_dir))),
         )

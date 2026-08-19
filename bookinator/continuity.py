@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import Config
-from .llm import call_claude_json
+from .llm import call_text_json
 from .models import ChaptersFile, StoryBible
 
 SYSTEM_PROMPT = (
@@ -34,7 +34,7 @@ def run_continuity_pass(
     manuscript = "\n\n".join(manuscript_parts)
 
     user = f"STORY BIBLE\n{bible.model_dump_json(indent=2)}\n\nFULL DRAFT\n\n{manuscript}"
-    result = call_claude_json(config, SYSTEM_PROMPT, user, max_tokens=16384)
+    result = call_text_json(config, SYSTEM_PROMPT, user, max_tokens=16384)
 
     for fix in result.get("fixes", []):
         idx = fix["chapter_index"]
