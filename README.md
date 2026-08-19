@@ -45,11 +45,16 @@ build a season -> one book) is a natural extension but isn't wired up yet.
 
 ## Running it (Docker)
 
+`docker-compose.yml` pulls the prebuilt image from
+`ghcr.io/poag/bookinator:main` - published automatically by
+`.github/workflows/docker-publish.yml` on every push to `main` - so no
+local build or repo checkout is needed beyond `docker-compose.yml` itself.
+
 ```bash
 cp .env.example .env
 # edit .env and set OPENROUTER_API_KEY
 
-docker compose up --build
+docker compose up -d
 ```
 
 Open http://localhost:8000. Create a project by uploading an mp3, then run
@@ -59,8 +64,10 @@ is bind-mounted into the container.
 
 No `config.toml` is required - the image installs ffmpeg on `PATH` and uses
 sensible defaults for everything else. See `config.example.toml` if you
-want to override the chunk length, model names, etc.: copy it to
-`config.toml` in this directory before building the image.
+want to override the chunk length, model names, providers, etc.: copy it to
+`config.toml` in this directory, then bind-mount it into the container by
+adding `- ./config.toml:/app/config.toml` under `volumes:` in
+`docker-compose.yml` (no rebuild needed - it's read at startup).
 
 ## Running it without Docker
 

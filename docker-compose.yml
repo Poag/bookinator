@@ -1,6 +1,9 @@
 services:
   bookinator:
-    build: .
+    # Published automatically by .github/workflows/docker-publish.yml on
+    # every push to main. Run `docker build .` (or add `build: .` back
+    # here) if you want to build from source instead.
+    image: ghcr.io/poag/bookinator:main
     ports:
       - "8000:8000"
     environment:
