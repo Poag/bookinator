@@ -23,13 +23,35 @@ def call_text(config: Config, system: str, user: str, max_tokens: int = 4096) ->
     return module.chat_completion(config, config.writing_model, messages, max_tokens=max_tokens)
 
 
-def call_text_json(config: Config, system: str, user: str, max_tokens: int = 4096):
-    text = call_text(config, system, user, max_tokens).strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-    return json.loads(text)
+def call_text_json(config: Config, system: str, user: str, max_tokens: int = 4096, attempts: int = 3):
+    """Call the model and parse its reply as JSON, retrying on malformed output.
+
+    Models occasionally return JSON that doesn't parse - truncated mid
+    string, a stray comment, etc. A fresh completion often comes back
+    clean on retry, so this resamples a few times before giving up. If
+    every attempt fails, the raised error includes a preview of the last
+    raw response so the failure is diagnosable instead of just a bare
+    JSONDecodeError with no context about what the model actually sent.
+    """
+    last_error: json.JSONDecodeError | None = None
+    last_text = ""
+    for _ in range(attempts):
+        text = call_text(config, system, user, max_tokens).strip()
+        last_text = text
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+
+    preview = last_text[:500] + ("..." if len(last_text) > 500 else "")
+    raise ValueError(
+        f"Model did not return valid JSON after {attempts} attempt(s): {last_error}\n\n"
+        f"Last response:\n{preview}"
+    )
 
 
 def require_object_list(value, field_name: str) -> list[dict]:
