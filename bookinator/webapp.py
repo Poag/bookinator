@@ -25,20 +25,24 @@ _jobs_lock = threading.Lock()
 _jobs: dict[str, dict] = {}
 
 
+_JOB_DEFAULTS = {"running": False, "current_stage": None, "log": [], "error": None}
+
+
 def _job(name: str) -> dict:
     with _jobs_lock:
-        return dict(_jobs.get(name, {"running": False, "log": [], "error": None}))
+        return dict(_jobs.get(name, _JOB_DEFAULTS))
 
 
 def _set_job(name: str, **updates) -> None:
     with _jobs_lock:
-        job = _jobs.setdefault(name, {"running": False, "log": [], "error": None})
+        job = _jobs.setdefault(name, dict(_JOB_DEFAULTS))
         job.update(updates)
 
 
 def _append_log(name: str, message: str) -> None:
+    print(f"[{name}] {message}", flush=True)
     with _jobs_lock:
-        job = _jobs.setdefault(name, {"running": False, "log": [], "error": None})
+        job = _jobs.setdefault(name, dict(_JOB_DEFAULTS))
         job["log"] = (job["log"] + [message])[-50:]
 
 
@@ -117,13 +121,15 @@ def _run_in_background(name: str, stages: list[str]) -> None:
         _set_job(name, running=True, error=None)
         try:
             for stage in stages:
+                _set_job(name, current_stage=stage)
                 _append_log(name, f"Running: {pipeline.STAGE_LABELS[stage]}...")
                 message = pipeline.run_stage(_config, name, stage)
                 _append_log(name, f"Done: {message}")
         except Exception as exc:  # noqa: BLE001
+            _append_log(name, f"Error: {exc}")
             _set_job(name, error=f"{exc}\n\n{traceback.format_exc()}")
         finally:
-            _set_job(name, running=False)
+            _set_job(name, running=False, current_stage=None)
 
     threading.Thread(target=target, daemon=True).start()
 
@@ -140,8 +146,9 @@ def project_dashboard(name: str) -> HTMLResponse:
     stage_rows = []
     for stage in pipeline.STAGES:
         done = status[stage]
-        badge = "running" if job["running"] else ("done" if done else "pending")
-        badge_text = "running" if job["running"] else ("done" if done else "not started")
+        is_running = job["running"] and job.get("current_stage") == stage
+        badge = "running" if is_running else ("done" if done else "pending")
+        badge_text = "running" if is_running else ("done" if done else "not started")
         disabled = "disabled" if job["running"] else ""
         stage_rows.append(f"""
         <div class="stage">
